@@ -81,6 +81,10 @@ robj *createRawStringObject(const char *ptr, size_t len) {
 /* Create a string object with encoding OBJ_ENCODING_EMBSTR, that is
  * an object where the sds string is actually an unmodifiable string
  * allocated in the same chunk as the object itself. */
+// embstr类型的字符串，是将对应的SDS对象分配到紧跟着obj指针的内存空间
+// 这样好处有两个：
+// 1）一次性分配了obj+sds空间，而不是像rawstr那样要分开两次分配 
+// 2）obj和sds放在一起，缓存命中率会提高
 robj *createEmbeddedStringObject(const char *ptr, size_t len) {
     robj *o = zmalloc(sizeof(robj)+sizeof(struct sdshdr8)+len+1);
     struct sdshdr8 *sh = (void*)(o+1);
@@ -397,6 +401,7 @@ robj *tryObjectEncoding(robj *o) {
      * Note that we are sure that a string larger than 20 chars is not
      * representable as a 32 nor 64 bit integer. */
     len = sdslen(s);
+    // 小于20(为什么是20？)而且能转换成long整型
     if (len <= 20 && string2l(s,len,&value)) {
         /* This object is encodable as a long. Try to use a shared object.
          * Note that we avoid using shared integers when maxmemory is used
@@ -422,6 +427,7 @@ robj *tryObjectEncoding(robj *o) {
      * try the EMBSTR encoding which is more efficient.
      * In this representation the object and the SDS string are allocated
      * in the same chunk of memory to save space and cache misses. */
+    // 长度小于OBJ_ENCODING_EMBSTR_SIZE_LIMIT就是用embstr编码的字符串
     if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT) {
         robj *emb;
 

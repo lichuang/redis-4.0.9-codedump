@@ -55,6 +55,7 @@ typedef struct dictEntry {
     struct dictEntry *next;
 } dictEntry;
 
+// 定义不同类型的hash数据的函数操作指针
 typedef struct dictType {
     uint64_t (*hashFunction)(const void *key);
     void *(*keyDup)(void *privdata, const void *key);
@@ -76,6 +77,7 @@ typedef struct dictht {
 typedef struct dict {
     dictType *type;
     void *privdata;
+    // 存放两个dictht，是为了进行rehash的时候之用
     dictht ht[2];
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
     unsigned long iterators; /* number of iterators currently running */

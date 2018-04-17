@@ -56,7 +56,12 @@
  * pointers being only at "level 1". This allows to traverse the list
  * from tail to head, useful for ZREVRANGE. */
 
-#include "server.h"
+// 存储zset时，用了两种数据结构：dict和skiplist
+// 添加一个数据<key,score>时，会首先以key插入score到dict中
+// 然后以score插入key到skiplist
+// 引入skiplist是为了根据score进行排序、查找等需求。
+
+#incrclude "server.h"
 #include <math.h>
 
 /*-----------------------------------------------------------------------------
@@ -1502,6 +1507,7 @@ void zaddGenericCommand(client *c, int flags) {
     /* Parse options. At the end 'scoreidx' is set to the argument position
      * of the score of the first score-element pair. */
     scoreidx = 2;
+    // scoreidx保存最后一个分数数据的索引
     while(scoreidx < c->argc) {
         char *opt = c->argv[scoreidx]->ptr;
         if (!strcasecmp(opt,"nx")) flags |= ZADD_NX;
@@ -1521,6 +1527,7 @@ void zaddGenericCommand(client *c, int flags) {
     /* After the options, we expect to have an even number of args, since
      * we expect any number of score-element pairs. */
     elements = c->argc-scoreidx;
+    // 成对出现的，所以不能是奇数
     if (elements % 2 || !elements) {
         addReply(c,shared.syntaxerr);
         return;
@@ -1528,12 +1535,14 @@ void zaddGenericCommand(client *c, int flags) {
     elements /= 2; /* Now this holds the number of score-element pairs. */
 
     /* Check for incompatible options. */
+    // 不能同时设置
     if (nx && xx) {
         addReplyError(c,
             "XX and NX options at the same time are not compatible");
         return;
     }
 
+    // incr操作不能操作大于一组元素的数量
     if (incr && elements > 1) {
         addReplyError(c,
             "INCR option supports a single increment-element pair");
@@ -1544,20 +1553,24 @@ void zaddGenericCommand(client *c, int flags) {
      * before executing additions to the sorted set, as the command should
      * either execute fully or nothing at all. */
     scores = zmalloc(sizeof(double)*elements);
+    // 保存解析出来的分数
     for (j = 0; j < elements; j++) {
         if (getDoubleFromObjectOrReply(c,c->argv[scoreidx+j*2],&scores[j],NULL)
             != C_OK) goto cleanup;
     }
 
     /* Lookup the key and create the sorted set if does not exist. */
+    // 查找key
     zobj = lookupKeyWrite(c->db,key);
     if (zobj == NULL) {
         if (xx) goto reply_to_client; /* No key + XX option: nothing to do. */
         if (server.zset_max_ziplist_entries == 0 ||
             server.zset_max_ziplist_value < sdslen(c->argv[scoreidx+1]->ptr))
         {
+          // 使用skiplist
             zobj = createZsetObject();
         } else {
+          // 使用ziplist
             zobj = createZsetZiplistObject();
         }
         dbAdd(c->db,key,zobj);

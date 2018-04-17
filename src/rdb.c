@@ -1011,6 +1011,7 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
     rio rdb;
     int error = 0;
 
+    // 先写入到临时文件
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
     fp = fopen(tmpfile,"w");
     if (!fp) {
@@ -2028,9 +2029,9 @@ void bgsaveCommand(client *c) {
     rdbSaveInfo rsi, *rsiptr;
     rsiptr = rdbPopulateSaveInfo(&rsi);
 
-    if (server.rdb_child_pid != -1) {
+    if (server.rdb_child_pid != -1) { // 有别的子进程正在进行rdb文件保存
         addReplyError(c,"Background save already in progress");
-    } else if (server.aof_child_pid != -1) {
+    } else if (server.aof_child_pid != -1) {  // 有别的子进程正在进行aof文件保存
         if (schedule) {
             server.rdb_bgsave_scheduled = 1;
             addReplyStatus(c,"Background saving scheduled");

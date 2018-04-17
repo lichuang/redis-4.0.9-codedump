@@ -55,6 +55,7 @@ static inline int sdsHdrSize(char type) {
     return 0;
 }
 
+// 不同长度，返回不同的SDS类型，为了节省内存空间
 static inline char sdsReqType(size_t string_size) {
     if (string_size < 1<<5)
         return SDS_TYPE_5;
@@ -84,6 +85,7 @@ static inline char sdsReqType(size_t string_size) {
 sds sdsnewlen(const void *init, size_t initlen) {
     void *sh;
     sds s;
+    // 根据initlen判断sds类型
     char type = sdsReqType(initlen);
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */

@@ -404,8 +404,11 @@ typedef long long mstime_t; /* millisecond time type. */
 #define CMD_CALL_FULL (CMD_CALL_SLOWLOG | CMD_CALL_STATS | CMD_CALL_PROPAGATE)
 
 /* Command propagation flags, see propagate() function */
+// 保存命令的标志位
 #define PROPAGATE_NONE 0
+// 保存到AOF文件中
 #define PROPAGATE_AOF 1
+// 保存到replication
 #define PROPAGATE_REPL 2
 
 /* RDB active child save type. */
@@ -773,6 +776,7 @@ typedef struct zskiplist {
     int level;
 } zskiplist;
 
+// zset由两部分数据结构组成，其中skiplist是为了根据分数进行查询所需
 typedef struct zset {
     dict *dict;
     zskiplist *zsl;

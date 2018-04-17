@@ -1103,17 +1103,19 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
          }
 
          /* Trigger an AOF rewrite if needed. */
-         if (server.aof_state == AOF_ON &&
-             server.rdb_child_pid == -1 &&
-             server.aof_child_pid == -1 &&
-             server.aof_rewrite_perc &&
-             server.aof_current_size > server.aof_rewrite_min_size)
+         if (server.aof_state == AOF_ON &&  // 有打开AOF开关
+             server.rdb_child_pid == -1 &&  // 没有在进行rdb文件写入
+             server.aof_child_pid == -1 &&  // 没有在进行AOF文件写入
+             server.aof_rewrite_perc &&     // 有配置这个参数
+             server.aof_current_size > server.aof_rewrite_min_size) // 大于aof rewrite的文件大小
          {
+            // 计算比例
             long long base = server.aof_rewrite_base_size ?
                             server.aof_rewrite_base_size : 1;
             long long growth = (server.aof_current_size*100/base) - 100;
-            if (growth >= server.aof_rewrite_perc) {
+            if (growth >= server.aof_rewrite_perc) {  // 比例大于配置的值
                 serverLog(LL_NOTICE,"Starting automatic rewriting of AOF on %lld%% growth",growth);
+                // 后台进行AOF文件的重写
                 rewriteAppendOnlyFileBackground();
             }
          }
@@ -2108,9 +2110,12 @@ struct redisCommand *lookupCommandOrOriginal(sds name) {
 void propagate(struct redisCommand *cmd, int dbid, robj **argv, int argc,
                int flags)
 {
+    // 没有在AOF
     if (server.aof_state != AOF_OFF && flags & PROPAGATE_AOF)
+        // 将变动写入AOF文件中
         feedAppendOnlyFile(cmd,dbid,argv,argc);
     if (flags & PROPAGATE_REPL)
+        // 同步变动给slave
         replicationFeedSlaves(server.slaves,dbid,argv,argc);
 }
 
@@ -2267,6 +2272,7 @@ void call(client *c, int flags) {
 
         /* Check if the command operated changes in the data set. If so
          * set for replication / AOF propagation. */
+        // 脏数据，说明有修改，同步到AOF或者replication中
         if (dirty) propagate_flags |= (PROPAGATE_AOF|PROPAGATE_REPL);
 
         /* If the client forced AOF / replication of the command, set

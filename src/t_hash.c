@@ -206,11 +206,14 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
         unsigned char *zl, *fptr, *vptr;
 
         zl = o->ptr;
+        // 拿到ziplist的头指针
         fptr = ziplistIndex(zl, ZIPLIST_HEAD);
-        if (fptr != NULL) {
+        if (fptr != NULL) { // 拿到了
+            // 在链表中查找key
             fptr = ziplistFind(fptr, (unsigned char*)field, sdslen(field), 1);
-            if (fptr != NULL) {
+            if (fptr != NULL) { // 找到了，说明之前存在同样的key
                 /* Grab pointer to the value (fptr points to the field) */
+                // 查找value并且进行修改
                 vptr = ziplistNext(zl, fptr);
                 serverAssert(vptr != NULL);
                 update = 1;
@@ -224,7 +227,7 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
             }
         }
 
-        if (!update) {
+        if (!update) {  // 没有更新，说明是新的值
             /* Push new field/value pair onto the tail of the ziplist */
             zl = ziplistPush(zl, (unsigned char*)field, sdslen(field),
                     ZIPLIST_TAIL);
@@ -234,11 +237,13 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
         o->ptr = zl;
 
         /* Check if the ziplist needs to be converted to a hash table */
+        // 如果hash元素数量超过阈值，就进行装换
         if (hashTypeLength(o) > server.hash_max_ziplist_entries)
             hashTypeConvert(o, OBJ_ENCODING_HT);
     } else if (o->encoding == OBJ_ENCODING_HT) {
+        // 查找是否存在相同的key
         dictEntry *de = dictFind(o->ptr,field);
-        if (de) {
+        if (de) { // 存在
             sdsfree(dictGetVal(de));
             if (flags & HASH_SET_TAKE_VALUE) {
                 dictGetVal(de) = value;
@@ -247,7 +252,7 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
                 dictGetVal(de) = sdsdup(value);
             }
             update = 1;
-        } else {
+        } else {  // 不存在
             sds f,v;
             if (flags & HASH_SET_TAKE_FIELD) {
                 f = field;
@@ -308,12 +313,15 @@ int hashTypeDelete(robj *o, sds field) {
 }
 
 /* Return the number of elements in a hash. */
+// 根据类型返回hash类型中的数据数量
 unsigned long hashTypeLength(const robj *o) {
     unsigned long length = ULONG_MAX;
 
     if (o->encoding == OBJ_ENCODING_ZIPLIST) {
+        // 如果是ziplist，那就是ziplist链表长度/2（因为K-V成对出现）
         length = ziplistLen(o->ptr) / 2;
     } else if (o->encoding == OBJ_ENCODING_HT) {
+        // 否则就是直接返回dict的数据数量
         length = dictSize((const dict*)o->ptr);
     } else {
         serverPanic("Unknown hash encoding");
@@ -462,6 +470,7 @@ robj *hashTypeLookupWriteOrCreate(client *c, robj *key) {
     return o;
 }
 
+// 将ziplist类型的hash转换为其他类型编码的hash数据
 void hashTypeConvertZiplist(robj *o, int enc) {
     serverAssert(o->encoding == OBJ_ENCODING_ZIPLIST);
 
@@ -537,8 +546,10 @@ void hsetCommand(client *c) {
     }
 
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
+    // 变量hset中的value大小，判断是否需要进行hash类型转换
     hashTypeTryConversion(o,c->argv,2,c->argc-1);
 
+    // 一对一对hash k-v设置进去
     for (i = 2; i < c->argc; i += 2)
         created += !hashTypeSet(o,c->argv[i]->ptr,c->argv[i+1]->ptr,HASH_SET_COPY);
 

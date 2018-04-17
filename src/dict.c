@@ -185,7 +185,9 @@ int dictExpand(dict *d, unsigned long size)
  * guaranteed that this function will rehash even a single bucket, since it
  * will visit at max N*10 empty buckets in total, otherwise the amount of
  * work it does would be unbound and the function may block for a long time. */
+// 执行渐进式的rehash操作
 int dictRehash(dict *d, int n) {
+    // 最多遍历多少个空桶
     int empty_visits = n*10; /* Max number of empty buckets to visit. */
     if (!dictIsRehashing(d)) return 0;
 
@@ -196,12 +198,13 @@ int dictRehash(dict *d, int n) {
          * elements because ht[0].used != 0 */
         assert(d->ht[0].size > (unsigned long)d->rehashidx);
         while(d->ht[0].table[d->rehashidx] == NULL) {
+            // 如果某个桶一直没有元素
             d->rehashidx++;
             if (--empty_visits == 0) return 1;
         }
         de = d->ht[0].table[d->rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
-        while(de) {
+        while(de) { // 将桶上的元素全部迁移到ht[1]上面
             uint64_t h;
 
             nextde = de->next;
@@ -218,7 +221,8 @@ int dictRehash(dict *d, int n) {
     }
 
     /* Check if we already rehashed the whole table... */
-    if (d->ht[0].used == 0) {
+    if (d->ht[0].used == 0) { // 检查是否迁移完成
+        // 完成的话重置ht[0|1]指针
         zfree(d->ht[0].table);
         d->ht[0] = d->ht[1];
         _dictReset(&d->ht[1]);
@@ -258,6 +262,7 @@ int dictRehashMilliseconds(dict *d, int ms) {
  * dictionary so that the hash table automatically migrates from H1 to H2
  * while it is actively used. */
 static void _dictRehashStep(dict *d) {
+    // 只有在迭代器为0的情况下才进行rehash操作，否则将破坏迭代操作
     if (d->iterators == 0) dictRehash(d,1);
 }
 
@@ -295,6 +300,7 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
     dictEntry *entry;
     dictht *ht;
 
+    // 如果正在rehash操作
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
     /* Get the index of the new element, or -1 if
@@ -306,6 +312,7 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
      * Insert the element in top, with the assumption that in a database
      * system it is more likely that recently added entries are accessed
      * more frequently. */
+    // 根据是否在进行rehash，来决定存放在哪个hash中
     ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
     entry = zmalloc(sizeof(*entry));
     entry->next = ht->table[index];
