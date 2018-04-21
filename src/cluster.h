@@ -27,12 +27,19 @@
 #define CLUSTER_SLAVE_MIGRATION_DELAY 5000 /* Delay for slave migration. */
 
 /* Redirection errors returned by getNodeByQuery(). */
+// 不需要重定向，本节点就可以处理请求
 #define CLUSTER_REDIR_NONE 0          /* Node can serve the request. */
+// 命令中包含了多个key，而这些key跨了不同的slot
 #define CLUSTER_REDIR_CROSS_SLOT 1    /* -CROSSSLOT request. */
+// 虽然多个key都在同一个slot中，但是此时该slot状态并不稳定（在迁移或者导入数据）
 #define CLUSTER_REDIR_UNSTABLE 2      /* -TRYAGAIN redirection required */
+// 
 #define CLUSTER_REDIR_ASK 3           /* -ASK redirection required. */
+// 该slot已经被迁移走了
 #define CLUSTER_REDIR_MOVED 4         /* -MOVED redirection required. */
+// 
 #define CLUSTER_REDIR_DOWN_STATE 5    /* -CLUSTERDOWN, global state. */
+// 查不到可用的节点与之关联，此时意味着集群状态是下线状态
 #define CLUSTER_REDIR_DOWN_UNBOUND 6  /* -CLUSTERDOWN, unbound slot. */
 
 struct clusterNode;
@@ -105,6 +112,7 @@ typedef struct clusterNodeFailReport {
     mstime_t time;             /* Time of the last report from this node. */
 } clusterNodeFailReport;
 
+// 保存集群节点信息的结构体
 typedef struct clusterNode {
     mstime_t ctime; /* Node object creation time. */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
@@ -132,6 +140,7 @@ typedef struct clusterNode {
     list *fail_reports;         /* List of nodes signaling this as failing */
 } clusterNode;
 
+// 保存集群状态的结构体
 typedef struct clusterState {
     clusterNode *myself;  /* This node */
     uint64_t currentEpoch;
@@ -246,6 +255,7 @@ typedef struct {
     uint64_t offset;    /* Master replication offset if node is a master or
                            processed replication offset if node is a slave. */
     char sender[CLUSTER_NAMELEN]; /* Name of the sender node */
+    // 通过cluster消息通过节点的slots信息
     unsigned char myslots[CLUSTER_SLOTS/8];
     char slaveof[CLUSTER_NAMELEN];
     char myip[NET_IP_STR_LEN];    /* Sender IP, if not all zeroed. */

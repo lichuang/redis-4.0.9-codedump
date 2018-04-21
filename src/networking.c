@@ -162,12 +162,21 @@ client *createClient(int fd) {
  * Typically gets called every time a reply is built, before adding more
  * data to the clients output buffers. If the function returns C_ERR no
  * data should be appended to the output buffers. */
+// 每次在向客户端传送数据之前都调用本函数
+// 如果客户端可以接收数据，就返回C_OK，将注册写事件回调函数以确保下一次
+// 客户端可写时进行回调
+// 如果客户端不能接收数据（比如加载AOF数据的假客户端），或者注册写事件回调失败，
+// 则返回C_ERR
+// 也有可能在返回C_OK但是没有注册写事件回调，可能有以下几种原因：
+// 1）写事件回调已经注册，因为写缓冲区已经有数据
+// 2）该客户端是slave，但是还没有在线，所以将把数据累积在缓冲区
 int prepareClientToWrite(client *c) {
     /* If it's the Lua client we always return ok without installing any
      * handler since there is no socket at all. */
     if (c->flags & (CLIENT_LUA|CLIENT_MODULE)) return C_OK;
 
     /* CLIENT REPLY OFF / SKIP handling: don't send replies. */
+    // 不需要进行应答的请求
     if (c->flags & (CLIENT_REPLY_OFF|CLIENT_REPLY_SKIP)) return C_ERR;
 
     /* Masters don't receive replies, unless CLIENT_MASTER_FORCE_REPLY flag
@@ -175,12 +184,14 @@ int prepareClientToWrite(client *c) {
     if ((c->flags & CLIENT_MASTER) &&
         !(c->flags & CLIENT_MASTER_FORCE_REPLY)) return C_ERR;
 
+    // 在加载AOF数据的假客户端
     if (c->fd <= 0) return C_ERR; /* Fake client for AOF loading. */
 
     /* Schedule the client to write the output buffers to the socket only
      * if not already done (there were no pending writes already and the client
      * was yet not flagged), and, for slaves, if the slave can actually
      * receive writes at this stage. */
+    // 注册写事件回调函数
     if (!clientHasPendingReplies(c) &&
         !(c->flags & CLIENT_PENDING_WRITE) &&
         (c->replstate == REPL_STATE_NONE ||

@@ -2374,6 +2374,10 @@ int processCommand(client *c) {
      * However we don't perform the redirection if:
      * 1) The sender of this command is our master.
      * 2) The command has no key arguments. */
+    // 集群模式下，需要进行命令的重定向。
+    // 以下两种情况下不做重定向：
+    // 1) 命令的发送者是master
+    // 2) 命令中没有key参数
     if (server.cluster_enabled &&
         !(c->flags & CLIENT_MASTER) &&
         !(c->flags & CLIENT_LUA &&
@@ -2383,9 +2387,11 @@ int processCommand(client *c) {
     {
         int hashslot;
         int error_code;
+        // 查询处理命令的节点指针
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
                                         &hashslot,&error_code);
         if (n == NULL || n != server.cluster->myself) {
+            // 需要重定向的情况
             if (c->cmd->proc == execCommand) {
                 discardTransaction(c);
             } else {
@@ -2396,6 +2402,7 @@ int processCommand(client *c) {
         }
     }
 
+    // 走到了这里，就是本节点处理请求的情况了
     /* Handle the maxmemory directive.
      *
      * First we try to free some memory if possible (if there are volatile
