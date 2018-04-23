@@ -5027,6 +5027,7 @@ void migrateCommand(client *c) {
     kv = zrealloc(kv,sizeof(robj*)*num_keys);
     int oi = 0;
 
+    // 遍历key写入到ov
     for (j = 0; j < num_keys; j++) {
         if ((ov[oi] = lookupKeyRead(c->db,c->argv[first_key+j])) != NULL) {
             kv[oi] = c->argv[first_key+j];
@@ -5034,6 +5035,7 @@ void migrateCommand(client *c) {
         }
     }
     num_keys = oi;
+    // 一个key都没找到
     if (num_keys == 0) {
         zfree(ov); zfree(kv);
         addReplySds(c,sdsnew("+NOKEY\r\n"));
@@ -5044,15 +5046,18 @@ try_again:
     write_error = 0;
 
     /* Connect */
+    // 连接
     cs = migrateGetSocket(c,c->argv[1],c->argv[2],timeout);
     if (cs == NULL) {
         zfree(ov); zfree(kv);
         return; /* error sent to the client by migrateGetSocket() */
     }
 
+    // 初始化缓冲区
     rioInitWithBuffer(&cmd,sdsempty());
 
     /* Authentication */
+    // 写入认证命令
     if (password) {
         serverAssertWithInfo(c,NULL,rioWriteBulkCount(&cmd,'*',2));
         serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd,"AUTH",4));
@@ -5061,6 +5066,7 @@ try_again:
     }
 
     /* Send the SELECT command if the current DB is not already selected. */
+    // 写入选择数据库命令
     int select = cs->last_dbid != dbid; /* Should we emit SELECT? */
     if (select) {
         serverAssertWithInfo(c,NULL,rioWriteBulkCount(&cmd,'*',2));
@@ -5069,6 +5075,7 @@ try_again:
     }
 
     /* Create RESTORE payload and generate the protocol to call the command. */
+    // 遍历key写入
     for (j = 0; j < num_keys; j++) {
         long long ttl = 0;
         long long expireat = getExpire(c->db,kv[j]);
@@ -5080,11 +5087,13 @@ try_again:
         serverAssertWithInfo(c,NULL,
             rioWriteBulkCount(&cmd,'*',replace ? 5 : 4));
 
+        // 写入restore或者restore-asking（集群模式下）命令
         if (server.cluster_enabled)
             serverAssertWithInfo(c,NULL,
                 rioWriteBulkString(&cmd,"RESTORE-ASKING",14));
         else
             serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd,"RESTORE",7));
+        // 写入key
         serverAssertWithInfo(c,NULL,sdsEncodedObject(kv[j]));
         serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd,kv[j]->ptr,
                 sdslen(kv[j]->ptr)));
@@ -5092,6 +5101,7 @@ try_again:
 
         /* Emit the payload argument, that is the serialized object using
          * the DUMP format. */
+        // 写入value为payload格式
         createDumpPayload(&payload,ov[j]);
         serverAssertWithInfo(c,NULL,
             rioWriteBulkString(&cmd,payload.io.buffer.ptr,
@@ -5112,6 +5122,7 @@ try_again:
         int nwritten = 0;
 
         while ((towrite = sdslen(buf)-pos) > 0) {
+            // 每次最多写64K数据到对端
             towrite = (towrite > (64*1024) ? (64*1024) : towrite);
             nwritten = syncWrite(cs->fd,buf+pos,towrite,timeout);
             if (nwritten != (signed)towrite) {
@@ -5122,6 +5133,7 @@ try_again:
         }
     }
 
+    // 以下是读应答数据
     char buf0[1024]; /* Auth reply. */
     char buf1[1024]; /* Select reply. */
     char buf2[1024]; /* Restore reply. */
