@@ -1272,35 +1272,42 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
     double curscore;
 
     /* NaN as input is an error regardless of all the other parameters. */
+    // 判断传入的浮点数是否合法
     if (isnan(score)) {
         *flags = ZADD_NAN;
         return 0;
     }
 
     /* Update the sorted set according to its encoding. */
-    if (zobj->encoding == OBJ_ENCODING_ZIPLIST) {
+    if (zobj->encoding == OBJ_ENCODING_ZIPLIST) { // 类型为ziplist
         unsigned char *eptr;
 
+        // 首先查找是否已经存在
         if ((eptr = zzlFind(zobj->ptr,ele,&curscore)) != NULL) {
             /* NX? Return, same element already exists. */
+            // nx在key已经存在的情况下不需要做什么操作
             if (nx) {
                 *flags |= ZADD_NOP;
                 return 1;
             }
 
             /* Prepare the score for the increment if needed. */
-            if (incr) {
+            if (incr) { // 如果需要incr操作
                 score += curscore;
+                // 增加之后仍然需要判断数据是否合法
                 if (isnan(score)) {
                     *flags |= ZADD_NAN;
                     return 0;
                 }
+                // 保存下来
                 if (newscore) *newscore = score;
             }
 
             /* Remove and re-insert when score changed. */
-            if (score != curscore) {
+            if (score != curscore) {  // 两者不相等，说明需要更新原来的数据
+                // 首先删除
                 zobj->ptr = zzlDelete(zobj->ptr,eptr);
+                // 然后重新添加进去
                 zobj->ptr = zzlInsert(zobj->ptr,ele,score);
                 *flags |= ZADD_UPDATED;
             }
@@ -1320,13 +1327,13 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
             *flags |= ZADD_NOP;
             return 1;
         }
-    } else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) {
+    } else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) { // 类型为sklist的情况
         zset *zs = zobj->ptr;
         zskiplistNode *znode;
         dictEntry *de;
 
         de = dictFind(zs->dict,ele);
-        if (de != NULL) {
+        if (de != NULL) { // key已经存在了
             /* NX? Return, same element already exists. */
             if (nx) {
                 *flags |= ZADD_NOP;
@@ -1563,6 +1570,7 @@ void zaddGenericCommand(client *c, int flags) {
     // 查找key
     zobj = lookupKeyWrite(c->db,key);
     if (zobj == NULL) {
+        // key不存在，那么需要创建出来
         if (xx) goto reply_to_client; /* No key + XX option: nothing to do. */
         if (server.zset_max_ziplist_entries == 0 ||
             server.zset_max_ziplist_value < sdslen(c->argv[scoreidx+1]->ptr))
